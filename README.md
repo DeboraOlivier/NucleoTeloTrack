@@ -10,7 +10,7 @@ Contributors
 =================
 The CellProfiler pipeline was created by Debora Keller [OrcidID](https://orcid.org/0000-0002-5284-3195) in [Laure Crabbe's lab](https://sites.google.com/yahoo.fr/crabbelab/).
 
-The jupyter notebooks were developped by Anatole Chessel (Assistant Professor, [OrcidID](https://orcid.org/0000-0002-1326-6305) ) and [Minh-Son Phan](https://msphan.github.io/) at the Laboratory for Optics and Biosciences at Ecole Polytechnique part of the Insitut Polytechnique de Paris.
+The jupyter notebooks were developped by [Minh-Son Phan](https://msphan.github.io/) and Anatole Chessel (Assistant Professor, [OrcidID](https://orcid.org/0000-0002-1326-6305) ) at the Laboratory for Optics and Biosciences at Ecole Polytechnique part of the Insitut Polytechnique de Paris.
 
 The statistical analysis in R was done by Marion Aguirrebengoa of the [Big-A platform](https://cbi-toulouse.fr/fr/equipe-big-a).
 

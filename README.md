@@ -6,6 +6,8 @@ It consists of:
 1) a **CellProfiler image analysis pipeline** that segments nuclei & telomeres, tracks nuclei, classifies them according to cell cycle stage, and perform various measurements (intensity, shape, counts)
 2) a series of **Jupyter Notebooks** to extract various nuclei tracks, align them according to a reference time, and generate graphs for multiple parameters including statistical anaysis.
 
+![NucleoTeloTrack_Overview](https://github.com/DeboraOlivier/NucleoTeloTrack/blob/master/NucleoTeloTrack_Overview.PNG)
+
 Contributors
 =================
 The CellProfiler pipeline was created by Debora Olivier [OrcidID](https://orcid.org/0000-0002-5284-3195) in [Laure Crabbe's lab](https://sites.google.com/yahoo.fr/crabbelab/).

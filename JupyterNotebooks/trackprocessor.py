@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Oct 14 15:56:54 2020
-
-@author: phantom
+TrackProcessor
+--------------
+This module provides functions used to process tracked objects from CellProfiler.
+The main function is process_data() which takes a csv file as an input. 
+The csv file contains information of tracked data from a movie. The data will 
+be cleaned up, then each tracked object is extracted, removed artifacts, 
+corrected the transistion states, aligned by referenced timepoints.
+The final output is a table containing aligned, cleaned tracks and their features. 
+It is saved into a csv file. The results at intermediate steps are also saved.
 """
 
 import os
@@ -15,7 +21,25 @@ import matplotlib.pyplot as plt
 from skimage import measure
 
 def save_plot_matrix(file_pattr,M,nrows_limit,yticklabels,title,cmap="jet",vmin=None,vmax=None,cticklabel=None):
+    """Matrix of a given feature is plotted and saved. 
     
+    The Image Number is shown in the column, and the tracked objects in row.
+    
+    Args:
+        file_pattr (str): file name pattern.
+        M (2D numpy matrix [float]): matrix to be plotted.
+        nrows_limit (int): maximal number of row to be plotted. Matrix is divided into smaller plots for clearer visual.
+        yticklabels (list [string]): list of tracked object labels.
+        title (str): plot title.
+        cmap (str): color map.
+        vmin (float): value smaller than vmin is displayed as vmin.
+        vmax (floag): value larger than vmax is displayed as vmax.
+        cticklabel (list [str]): color bar tick labels.
+        
+    Returns:
+        plot is saved into .png file.
+    
+    """
     nrow = M.shape[0]
     ntimes = int(np.ceil(nrow/nrows_limit))
     ytick_begin = 0
@@ -52,71 +76,77 @@ def save_plot_matrix(file_pattr,M,nrows_limit,yticklabels,title,cmap="jet",vmin=
 
         ytick_begin = ytick_end + 1
         
-def save_plot_xy_track(filename,subdata,title,xmax,ymax,cmap="jet",vmin=None,vmax=None,cticklabel=None,norm=None):
+# def save_plot_xy_track(filename,subdata,title,xmax,ymax,cmap="jet",vmin=None,vmax=None,cticklabel=None,norm=None):
     
-    fig = plt.figure(figsize=(8,5))
-    ax = fig.add_subplot(111)
-    for _,g in subdata.groupby('TrackObjects_Label'):
-        x = g['AreaShape_Center_X'].values
-        y = g['AreaShape_Center_Y'].values
-        ax.plot(x,y,c="k",lw=0.5)
-        for t,gg in g.groupby('TrackObjects_StateNumber'):
-            x = gg['AreaShape_Center_X'].values
-            y = gg['AreaShape_Center_Y'].values
-            ax.scatter(x,y,s=15,c=[t for _ in range(len(x))],cmap=cmap,vmin=-0.5,vmax=6.5,edgecolors="black",lw=0.3,alpha=1.)
+#     fig = plt.figure(figsize=(8,5))
+#     ax = fig.add_subplot(111)
+#     for _,g in subdata.groupby('TrackObjects_Label'):
+#         x = g['AreaShape_Center_X'].values
+#         y = g['AreaShape_Center_Y'].values
+#         ax.plot(x,y,c="k",lw=0.5)
+#         for t,gg in g.groupby('TrackObjects_StateNumber'):
+#             x = gg['AreaShape_Center_X'].values
+#             y = gg['AreaShape_Center_Y'].values
+#             ax.scatter(x,y,s=15,c=[t for _ in range(len(x))],cmap=cmap,vmin=-0.5,vmax=6.5,edgecolors="black",lw=0.3,alpha=1.)
 
-    cbax = fig.add_axes([0.85, 0.3, 0.01, 0.4]);
-    cb = mpl.colorbar.ColorbarBase(cbax, cmap=cmap, norm=norm, orientation='vertical');
-    cb.set_ticks(range(7))
-    cb.set_ticklabels(cticklabel);
+#     cbax = fig.add_axes([0.85, 0.3, 0.01, 0.4]);
+#     cb = mpl.colorbar.ColorbarBase(cbax, cmap=cmap, norm=norm, orientation='vertical');
+#     cb.set_ticks(range(7))
+#     cb.set_ticklabels(cticklabel);
 
-    ax.set_xlabel("X");
-    ax.set_ylabel("Y");
-    ax.axis("equal");
-    ax.hlines(0,0,xmax,lw=1,linestyles="dashed");
-    ax.hlines(ymax,0,xmax,lw=1,linestyles="dashed");
-    ax.vlines(0,0,ymax,lw=1,linestyles="dashed");
-    ax.vlines(xmax,0,ymax,lw=1,linestyles="dashed");
+#     ax.set_xlabel("X");
+#     ax.set_ylabel("Y");
+#     ax.axis("equal");
+#     ax.hlines(0,0,xmax,lw=1,linestyles="dashed");
+#     ax.hlines(ymax,0,xmax,lw=1,linestyles="dashed");
+#     ax.vlines(0,0,ymax,lw=1,linestyles="dashed");
+#     ax.vlines(xmax,0,ymax,lw=1,linestyles="dashed");
 
-    ax.set_title(title);
+#     ax.set_title(title);
     
-    fig.savefig(filename,dpi=150)
-    plt.close(fig)
+#     fig.savefig(filename,dpi=150)
+#     plt.close(fig)
     
-def save_plot_xy_track_exlu(filename,X,Y,title,xmax,ymax):
-    """Saving track after excluding positions intersecting image border.
-    """
+# def save_plot_xy_track_exlu(filename,X,Y,title,xmax,ymax):
+#     """Saving track after excluding positions intersecting image border.
+#     """
     
-    fig = plt.figure(figsize=(8,5))
-    ax = fig.add_subplot(111)
-    for itrack in range(X.shape[0]):
-        ix = np.argwhere((X[itrack]!=-1)&(Y[itrack]!=-1)).flatten()
-        if len(ix)!=0:
-            ax.plot(X[itrack,ix],Y[itrack,ix],'-o',ms=3,markerfacecolor="None",markeredgewidth=0.5)
+#     fig = plt.figure(figsize=(8,5))
+#     ax = fig.add_subplot(111)
+#     for itrack in range(X.shape[0]):
+#         ix = np.argwhere((X[itrack]!=-1)&(Y[itrack]!=-1)).flatten()
+#         if len(ix)!=0:
+#             ax.plot(X[itrack,ix],Y[itrack,ix],'-o',ms=3,markerfacecolor="None",markeredgewidth=0.5)
 
-    ax.set_xlabel("X");
-    ax.set_ylabel("Y");
-    ax.axis("equal");
-    ax.hlines(0,0,xmax,lw=1,linestyles="dashed");
-    ax.hlines(ymax,0,xmax,lw=1,linestyles="dashed");
-    ax.vlines(0,0,ymax,lw=1,linestyles="dashed");
-    ax.vlines(xmax,0,ymax,lw=1,linestyles="dashed");
+#     ax.set_xlabel("X");
+#     ax.set_ylabel("Y");
+#     ax.axis("equal");
+#     ax.hlines(0,0,xmax,lw=1,linestyles="dashed");
+#     ax.hlines(ymax,0,xmax,lw=1,linestyles="dashed");
+#     ax.vlines(0,0,ymax,lw=1,linestyles="dashed");
+#     ax.vlines(xmax,0,ymax,lw=1,linestyles="dashed");
 
-    ax.set_title(title);
+#     ax.set_title(title);
     
-    fig.savefig(filename,dpi=150)
-    plt.close(fig)
-    
+#     fig.savefig(filename,dpi=150)
+#     plt.close(fig)
 
 def remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,percentage=0.8):
-    """Removing tracked positions intersecting the image border - from CellProfiler version 3
+    """Remove tracked positions intersecting the image border. Only the positions
+    touching the border but not entire track are excluded. The border-touching object 
+    is determined by checking the circle whose radius defined by the major axis.
+    
+    Work for CellProfiler 3.x.
     
     Args:
-        M (2D matrix (float)): Transistion table
-        F (List of 2D matrices (float)): List of feature table
-        X, Y, R1, R2 (2D matrix (float)): x, y positions, minor and major radii of nucleus
-        xmax, ymax (float): maximal x, y values determinig movie size
-        percentage (float): percentage of radius to be used to check touching border
+        M (2D numpy matrix [float]): Transistion table.
+        F (List of 2D matrices [float]): List of corresponding feature table.
+        X, Y, R1, R2 (2D matrix [float]): x, y positions, minor and major radii of nucleus
+        xmax, ymax (float): movie width and height.
+        percentage (float):  fraction of radius used to compute circle, smaller value gives smaller circle for detecting border-touching.
+        
+    Returns:
+        Feature matrices, center coordinates of tracks after border-touching removing.
     
     """
     Mr = M.copy()
@@ -136,14 +166,21 @@ def remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,percentage=0.8):
     return (Mr, Fr, Xr, Yr)
 
 def remove_intersect_border_by_bbox(M,F,X,Y,Xbmin,Xbmax,Ybmin,Ybmax,xmax,ymax):
-    """Removing tracked positions intersecting the image border - from CellProfiler version 4.0
+    """Removing tracked positions intersecting the image border. Only the positions
+    touching the border but not entire track are excluded. The border-touching object 
+    is determined by checking the bounding box.
+    
+    Work for CellProfiler 4.x.
     
     Args:
-        M (2D matrix (float)): Transistion table
-        F (List of 2D matrices (float)): List of feature table
-        X, Y (2D matrix (float)): object centers
-        Xbmin,Xbmax,Ybmin,Ybmax (2D matrix (float)): bounding box min max coordinates
-        xmax, ymax (float): maximal x, y values determinig movie size
+        M (2D numpy matrix [float]): Transistion table.
+        F (List of 2D numpy matrices [float]): List of feature table.
+        X, Y (2D numpy matrix [float]): object centers.
+        Xbmin,Xbmax,Ybmin,Ybmax (float): bounding box min max coordinates.
+        xmax, ymax (float): movie width and height.
+        
+    Returns:
+        Feature matrices, center coordinates of tracks after border-touching removing.
     
     """
     Mr = M.copy()
@@ -162,13 +199,16 @@ def remove_intersect_border_by_bbox(M,F,X,Y,Xbmin,Xbmax,Ybmin,Ybmax,xmax,ymax):
     return (Mr, Fr, Xr, Yr)
 
 def remove_transistions(M,F,G,statelbl):
-    """Remove violated transistions based transistion rule graph G.
+    """Remove transistions violate the transistion rules defining in graph G.
     
     Args:
-        M (2D matrix (float)): Transistion table
-        F (List of 2D matrices (float)): List of feature table
-        G (networkx graph): transistion rule graph
-        statelbl (list(str)): transistion state name
+        M (2D numpy matrix [float]): Transistion table.
+        F (List of 2D numpy matrices [float]): List of feature table.
+        G (networkx graph [networkx]): graph defines the transistion rules.
+        statelbl (list [str]): transistion state names.
+        
+    Returns:
+        Feature matrices of tracks after removing violated transistions.
     
     """
     Mr = []
@@ -198,16 +238,22 @@ def remove_transistions(M,F,G,statelbl):
     return (Mr,Fr)
 
 def align_time_points(Mr,Fr,state_numbers=[4,5,6],align_modes=["last","first","first"],shifts=[0,1,1]):
-    """Align track objects based on referenced state transistions
+    """Align track objects based on referenced states given in state_numbers.
+    
+    The first state in state_numbers will be checked. If that state does not exist,
+    then check the second state from the list and so on.
     
     Args:
-        Mr (2D matrix (float)): State transistion matrix
-        Fr (List of 2D matrices (float)): Corresponding features matrices.
-        state_numbers (list (int)): list of referenced transistions 
-        align_modes (list (str)): list of align mode: 
+        Mr (2D numpy matrix [float]): State transistion matrix
+        Fr (List of 2D numpy matrices [float]): Corresponding features matrices.
+        state_numbers (list [int]): list of referenced transistions.
+        align_modes (list [str]): list of align mode: 
             if "first", then align based on the first time point of the corresponding transisition,
             otherwise, align based on the last time point.
-        shifts (list (int)): offset to be added
+        shifts (list [int]): offset to be added.
+        
+    Returns:
+       Aligned time points, corresponding states and features. 
     
     """
     
@@ -277,24 +323,27 @@ def process_data(input_file,output_path,features,transition_graph,
                  nrows_limit=30,min_nb_timepoints=5,
                  exclude_borderobjs_conds = {"criterion":"circle","percentage":0.8},
                  align_conds={"state_numbers":[4,5,6],"align_modes":["last","first","first"],"shifts":[0,1,1]}):
-    """Data processing
+    """Process tracked data from CellProfiler.
     
     Args:
-        input_file (str): input file
-        output_path (str): output directory
-        features (list (str)): list of analysed features
-        transition_graph (networkx): transistion rule graph
-        nrows_limit (uint): maximal row for each plot
-        min_nb_timepoints (uint): minimal number of timepoints need for each track
-        exclude_borderobjs_conds (dict): conditions are applied to exclude objects touching image border (see remove_intersect_border() for details)
+        input_file (str): input csv file.
+        output_path (str): output directory.
+        features (list (str)): list of features to be aligned.
+        transition_graph (networkx): graph defining transistion rules.
+        nrows_limit (uint): maximal row for each plot. Each row shows a track object from a movie. Movie plot is divided into smaller subplots by nrows_limits.
+        min_nb_timepoints (uint): minimal number of timepoints need for each track.
+        exclude_borderobjs_conds (dict): conditions are applied to exclude objects touching image border (see remove_intersect_border() for details).
         align_conds (dict): conditions are applied to align time points (see align_time_points() for details)
+    
+    Returns:
+        Table of aligned tracks and corresponding features. Intermediate results are plotted and saved.
     
     """
     
     # load data
     data = pd.read_csv(input_file)
     
-    # first try to remove usefuless columns and rows
+    # remove usefuless columns and rows
     try:
         # drop useless columns
         dropdata = data.drop(['Metadata_MovieName.1',
@@ -337,16 +386,16 @@ def process_data(input_file,output_path,features,transition_graph,
         transistion_columns = ["Children_{}_Count".format(item) for item in list(G.nodes)]
         
         # encode columns to uint number (power of 2)
-        # NOTE: work for uint8 (8 columns max) for instant, can be updated further
+        # NOTE: work for uint8 (8 labels max) for instant, can be updated for higher labels further.
         # NOTE: the order of columns can change the encoding number => BE CAREFULL
         cycle_bit = np.packbits(data[transistion_columns].values,axis=1,bitorder="little").flatten()
         
-        # temporary replace 0 by a number for using logarithm
+        # temporarily replace 0 by a positive number to avoid error when using logarithm
         cycle_bit[cycle_bit==0]=2**len(transistion_columns) 
         
         cycle_number = np.log2(cycle_bit)+1 # make number to be continuous, e.g. 1, 2, 3, ...
         
-        # replace the max number to 0 (since we modifed it before)
+        # convert replaced number back to 0 (since we modifed it before)
         cycle_number[cycle_number==len(transistion_columns)+1]=0
         
 #         print(data[transistion_columns].values)
@@ -384,13 +433,20 @@ def process_data(input_file,output_path,features,transition_graph,
         os.makedirs(output_path)
     
     # first level folders
-    new_dir = ["Processed_CSV","Analysed_CSV","Figures","Transistion_Matrix"]   
+    # Processed_CSV: cleaned dataset
+    # Analysed_CSV: aligned dataset
+    # Figures: plots at intermediate steps
+    # Transistion_Matrix: numpy matrices o track state transistions
+    new_dir = ["Processed_CSV","Analysed_CSV","Figures","Transistion_Matrix"]  
     for idir in new_dir:
         subpath = os.path.join(output_path,idir)
         if not os.path.exists(subpath):
             os.makedirs(subpath)
     
     # subfolders of Figures, organized by features
+    # Table: matrix plot
+    # RefTime: line plot over referenced time
+    # Transistion: boxplot over transistion states
     fig_subdir = ["State_Transistion"] + features
     fig_ssubdir = ["Table","RefTime","Transistion"]
     for idir in fig_subdir: 

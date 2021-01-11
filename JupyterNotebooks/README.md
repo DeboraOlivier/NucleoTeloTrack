@@ -1,5 +1,10 @@
-
 ## How to install jupyter notebooks
+
+### Dependent packages
+
+conda create -n nucleotelotrack python=3.6
+conda activate nucleotelotrack
+pip install pandas seaborn scikit-image networkx pathos tqdm notebook
 
 ## How to use jupyter notebooks
 
@@ -18,3 +23,11 @@ create a csv per position with all tracks and the selected features
 
 ## Analyze_Data notebook
 This notebook will ...
+
+## Todo
+
+trackprocessor.python
+- process_data(): adding option for color map, time step in minutes.
+
+
+## Issues

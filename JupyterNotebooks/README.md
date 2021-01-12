@@ -27,7 +27,6 @@ This notebook will ...
 ## Todo
 
 trackprocessor.python
-- process_data(): adding option for color map, time step in minutes.
-
+- process_data(): add option for color map, time step in minutes.
 
 ## Issues

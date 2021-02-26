@@ -2,9 +2,9 @@
 
 ### Dependent packages
 
-conda create -n nucleotelotrack python=3.6
-conda activate nucleotelotrack
-pip install pandas seaborn scikit-image networkx pathos tqdm notebook
+- conda create -n nucleotelotrack python=3.6
+- conda activate nucleotelotrack
+- pip install pandas seaborn scikit-image networkx pathos tqdm notebook jupyter_contrib_nbextensions
 
 ## How to use jupyter notebooks
 

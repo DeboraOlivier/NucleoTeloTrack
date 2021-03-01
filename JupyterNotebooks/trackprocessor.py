@@ -16,9 +16,9 @@ import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 from skimage import measure
+import networkx as nx
 
 def save_plot_matrix(file_pattr,M,nrows_limit,yticklabels,title,cmap="jet",vmin=None,vmax=None,cticklabel=None):
     """Matrix of a given feature is plotted and saved. 
@@ -198,8 +198,172 @@ def remove_intersect_border_by_bbox(M,F,X,Y,Xbmin,Xbmax,Ybmin,Ybmax,xmax,ymax):
     
     return (Mr, Fr, Xr, Yr)
 
+def correct_transistion_row(row,G,statelbl):
+    """Remove violated transistions from a given row.
+
+    This function is used as a support function for remove_transistions(), which remove violated states
+    for all tracks organized in matrix.
+
+    Args:
+        row (array of float): list of transistion states.
+        G (networkx graph): transistion graph.
+        statelbl (list of string): labels of transistion states.
+
+    Return:
+        list of transistion states in which the violated ones are marked as "0".
+
+    TODO: exclude "0" group from the checking process.
+
+    """
+        
+    # Compute super state ID and its length
+    # Example: 
+    # row = [1,1,1,1,2,2,2,1,1] 
+    # super state id = [1,2,1]
+    # state len = [4,3,2]
+    icol = 0
+    state_len = []
+    sup_state_id = []
+    count = 1
+    while (icol < len(row)):
+        if((icol)==(len(row)-1)):
+            state_len.append(count)
+            sup_state_id.append(int(row[icol]))
+        elif row[icol] == row[icol+1]:
+            count += 1
+        else:
+            state_len.append(count)
+            sup_state_id.append(int(row[icol]))
+            count = 1
+        icol += 1
+        
+    # Initialize exclusion flag, set False as default (no states to be excluded)
+    is_excluded = [False for _ in sup_state_id]
+    
+    # Iteratively check each item in super state ID and exclude the violated one by marking the is_excluded flag
+    iprev, icrr, inext = -1, 0, 1 # previous, current and next indicators
+    while((icrr < (len(sup_state_id)-1)) & (inext < len(sup_state_id))):
+
+        # Compute previous state        
+        if iprev == -1:
+            prev_state_id = 0
+            prev_state_len = 0
+        else:
+            prev_state_id = sup_state_id[iprev]
+            prev_state_len = state_len[iprev]
+        
+        # Compute current state        
+        curr_state_id = sup_state_id[icrr]
+        curr_state_len = state_len[icrr]
+        
+        # Compute next state        
+        next_state_id = sup_state_id[inext]
+        next_state_len = state_len[inext]
+        
+        # print("previous current state:",prev_state_id,prev_state_len)
+        # print("current state:",curr_state_id,curr_state_len)
+        # print("next state:",next_state_id,next_state_len)
+        
+        # print(curr_state_id)
+        # print(next_state_id)
+        
+        # If there is transistion between curr and next
+        if(G.has_edge(statelbl[curr_state_id],statelbl[next_state_id])==True):
+            iprev = icrr
+            icrr = inext
+            inext += 1
+        else:
+            # If there is no transistion between prev and next
+            if(G.has_edge(statelbl[prev_state_id],statelbl[next_state_id])==False):
+                is_excluded[inext] = True
+                inext += 1
+            else:
+                # Compute score for curr and next
+                # The one with lower score will be excluded
+                curr_state_score = prev_state_len + curr_state_len
+                next_state_score = prev_state_len + next_state_len
+                
+                # print(curr_state_score)
+                # print(next_state_score)
+                
+                if curr_state_score < next_state_score:
+                    is_excluded[icrr] = True
+                    icrr = inext
+                    inext += 1
+                elif next_state_score < curr_state_score:
+                    is_excluded[inext] = True
+                    inext += 1
+                else:
+                    # If the scores are equal
+                    # Then compute the number of steps need to go from a transistion to another.
+                    # The one with higher number of steps will be excluded
+                    curr_path_len = nx.shortest_path_length(G,statelbl[prev_state_id],statelbl[curr_state_id])
+                    next_path_len = nx.shortest_path_length(G,statelbl[prev_state_id],statelbl[next_state_id])
+                    if curr_path_len <= next_path_len:
+                        is_excluded[inext] = True
+                        inext += 1
+                    else:
+                        is_excluded[icrr] = True
+                        icrr = inext
+                        inext += 1
+                
+    # print(row)
+    
+    # Assign excluded states by "0"
+    row_corrected = []
+    for item in zip(sup_state_id,state_len,is_excluded):
+        if item[2] == False:
+            row_corrected += [item[0] for _ in range(item[1])]
+        else:
+            row_corrected += [0 for _ in range(item[1])]
+    # print(row_corrected)
+                
+    # print(sup_state_id)
+    # print(state_len)
+    # print(is_excluded)
+    
+    return row_corrected
+
 def remove_transistions(M,F,G,statelbl):
     """Remove transistions violate the transistion rules defining in graph G.
+    
+    Args:
+        M (2D numpy matrix [float]): Transistion table.
+        F (List of 2D numpy matrices [float]): List of feature table.
+        G (networkx graph [networkx]): graph defines the transistion rules.
+        statelbl (list [str]): transistion state names.
+        
+    Returns:
+        Feature matrices of tracks after removing violated transistions.
+    
+    """
+
+    # Initialize state transistion matrix Mr and its related featured matrices Fr
+    Mr = []
+    Fr = [[] for _ in F]
+    
+    # Exclude violated states for every track
+    for irow in range(M.shape[0]):
+        row = M[irow].copy()
+        row_sup = [FF[irow].copy() for FF in F]
+        row_corrected = correct_transistion_row(row, G, statelbl)
+        for i in range(len(row_corrected)):
+            if row_corrected[i] == 0:
+               for irowsup in range(len(row_sup)):
+                    row_sup[irowsup][i]=-1
+        
+        Mr.append(row_corrected)
+        for ifea in range(len(Fr)):
+            Fr[ifea].append(row_sup[ifea])
+            
+    Mr = np.array(Mr)
+    Fr = [np.array(FF) for FF in Fr]
+    return (Mr,Fr)
+
+def remove_transistions_old(M,F,G,statelbl):
+    """Remove transistions violate the transistion rules defining in graph G.
+
+    This function is outdate. Please use remove_transistions().
     
     Args:
         M (2D numpy matrix [float]): Transistion table.
@@ -236,7 +400,8 @@ def remove_transistions(M,F,G,statelbl):
     Mr = np.array(Mr)
     Fr = [np.array(FF) for FF in Fr]
     return (Mr,Fr)
-
+    
+    
 def align_time_points(Mr,Fr,state_numbers=[4,5,6],align_modes=["last","first","first"],shifts=[0,1,1]):
     """Align track objects based on referenced states given in state_numbers.
     

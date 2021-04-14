@@ -54,13 +54,13 @@ def save_plot_matrix(file_pattr,M,nrows_limit,yticklabels,title,cmap="jet",vmin=
 
         pl = ax.imshow(M[ytick_begin:ytick_end+1],cmap=cmap,vmin=vmin,vmax=vmax);
 
-        ax.set_aspect(5);
+        ax.set_aspect(3);
         ax.grid("on");
-        ax.set_xticks(np.arange(0,M.shape[1],9));
-        ax.set_xticklabels(np.arange(0,M.shape[1],9)+1);
+        ax.set_xticks(np.arange(0,M.shape[1],5));
+        ax.set_xticklabels(np.arange(0,M.shape[1],5)+1,fontsize=5);
         ax.set_ylim(-0.5,ytick_end-ytick_begin+0.5)
         ax.set_yticks(range(ytick_end-ytick_begin+1));
-        ax.set_yticklabels(yticklabels[ytick_begin:ytick_end+1]);
+        ax.set_yticklabels(yticklabels[ytick_begin:ytick_end+1],fontsize=5);
         ax.set_xlabel("Image Number")
         ax.set_ylabel("TrackObject_Label");
 
@@ -131,18 +131,19 @@ def save_plot_matrix(file_pattr,M,nrows_limit,yticklabels,title,cmap="jet",vmin=
 #     fig.savefig(filename,dpi=150)
 #     plt.close(fig)
 
-def remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,percentage=0.8):
+def remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,bymajor=True,percentage=0.8):
     """Remove tracked positions intersecting the image border. Only the positions
     touching the border but not entire track are excluded. The border-touching object 
     is determined by checking the circle whose radius defined by the major axis.
     
-    Work for CellProfiler 3.x.
+    Work for CellProfiler >= 3.x.
     
     Args:
         M (2D numpy matrix [float]): Transistion table.
         F (List of 2D matrices [float]): List of corresponding feature table.
-        X, Y, R1, R2 (2D matrix [float]): x, y positions, minor and major radii of nucleus
+        X, Y, R1, R2, Area (2D matrix [float]): x, y positions, minor and major radii, area of nucleus
         xmax, ymax (float): movie width and height.
+        bymajor (boolean): axis used to check the border touching. Set bymajor = False, then the minor axis is used.
         percentage (float):  fraction of radius used to compute circle, smaller value gives smaller circle for detecting border-touching.
         
     Returns:
@@ -153,17 +154,65 @@ def remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,percentage=0.8):
     Fr = [FF.copy() for FF in F]
     Xr,Yr = X.copy(),Y.copy()
     
-    R = np.maximum(R1,R2)*percentage
-    Mask = ((X!=-1)&(((X-R)<0)|((X+R)>xmax)|((Y-R)<0)|((Y+R)>ymax)))
+    # check which axis is used to check the touching
+    if bymajor==True:
+        R = np.maximum(R1,R2)*percentage
+    else:
+        R = np.minimum(R1,R2)*percentage
     
+    # define mask used to exclude objects
+    Mask = ((X!=-1)&(((X-R)<0)|((X+R)>xmax)|((Y-R)<0)|((Y+R)>ymax)))
     Mr[Mask] = 0
     for ifea in range(len(Fr)):
-        Fr[ifea][Mask] = -1
-    
+        Fr[ifea][Mask] = -1 
     Xr[Mask] = -1
     Yr[Mask] = -1
     
+    # # major mask
+    # R = R2 * percentage
+    # Mask2 = ((X!=-1)&(((X-R)<0)|((X+R)>xmax)|((Y-R)<0)|((Y+R)>ymax)))
+    # Mask = (Mask2*1. - Mask*1.)>0
+    # Mr[Mask] = 0
+    # for ifea in range(len(Fr)):
+    #     Fr[ifea][Mask] = -1 
+    # Xr[Mask] = -1
+    # Yr[Mask] = -1
+    
     return (Mr, Fr, Xr, Yr)
+
+# def remove_intersect_border_by_circle_old(M,F,X,Y,R1,R2,xmax,ymax,percentage=0.8):
+#     """Remove tracked positions intersecting the image border. Only the positions
+#     touching the border but not entire track are excluded. The border-touching object 
+#     is determined by checking the circle whose radius defined by the major axis.
+    
+#     Work for CellProfiler >= 3.x.
+    
+#     Args:
+#         M (2D numpy matrix [float]): Transistion table.
+#         F (List of 2D matrices [float]): List of corresponding feature table.
+#         X, Y, R1, R2 (2D matrix [float]): x, y positions, minor and major radii of nucleus
+#         xmax, ymax (float): movie width and height.
+#         percentage (float):  fraction of radius used to compute circle, smaller value gives smaller circle for detecting border-touching.
+        
+#     Returns:
+#         Feature matrices, center coordinates of tracks after border-touching removing.
+    
+#     """
+#     Mr = M.copy()
+#     Fr = [FF.copy() for FF in F]
+#     Xr,Yr = X.copy(),Y.copy()
+    
+#     R = np.maximum(R1,R2)*percentage
+#     Mask = ((X!=-1)&(((X-R)<0)|((X+R)>xmax)|((Y-R)<0)|((Y+R)>ymax)))
+    
+#     Mr[Mask] = 0
+#     for ifea in range(len(Fr)):
+#         Fr[ifea][Mask] = -1
+    
+#     Xr[Mask] = -1
+#     Yr[Mask] = -1
+    
+#     return (Mr, Fr, Xr, Yr)
 
 def remove_intersect_border_by_bbox(M,F,X,Y,Xbmin,Xbmax,Ybmin,Ybmax,xmax,ymax):
     """Removing tracked positions intersecting the image border. Only the positions
@@ -644,11 +693,14 @@ def process_data(input_file,output_path,features,transition_graph,
         subdata = data[data['Metadata_MovieName']==movies[imovie]].copy()
         
         # substrating image number offset
-        subdata["ImageNumber"] = subdata["ImageNumber"] - subdata["ImageNumber"].min() + 1
+        image_number_offset = subdata["ImageNumber"].min()
+        subdata["ImageNumber"] = subdata["ImageNumber"] - image_number_offset + 1
         # setting table indices
         subdata.set_index(['ImageNumber','ObjectNumber'],inplace=True)
         # sort image number by ascending order
         subdata.sort_index(level="ImageNumber",inplace=True)
+        
+        print(image_number_offset)
                 
         # save cleaned data
         subfile = os.path.join(output_path,new_dir[0],movies[imovie]+".csv")
@@ -680,14 +732,20 @@ def process_data(input_file,output_path,features,transition_graph,
         for _ in features:
             F.append(np.ones((len(trackobjs_label),max(imgnum)))*-1)
         
+        # initialize referenced object number matrix
+        O = np.zeros((len(trackobjs_label),max(imgnum)))
+       
         # build track matrices
         for itrack in range(len(trackobjs_label)):
             trackobj = trackobjs_label[itrack]
             tmpdf = subdata[subdata['TrackObjects_Label']==trackobj].copy()
             
             obj_imgnum = tmpdf.index.get_level_values("ImageNumber").values
+            obj_objnum = tmpdf.index.get_level_values("ObjectNumber").values
             
             if len(obj_imgnum)>=min_nb_timepoints: # only consider track with minimal number of timepoints
+            
+                O[itrack,obj_imgnum-1] = obj_objnum
 
                 obj_state = tmpdf["TrackObjects_StateNumber"].values
                 M[itrack,obj_imgnum-1] = np.floor(obj_state)
@@ -696,8 +754,8 @@ def process_data(input_file,output_path,features,transition_graph,
                 Y[itrack,obj_imgnum-1] = tmpdf["AreaShape_Center_Y"].values
                 
                 if exclude_borderobjs_conds["criterion"]=="circle":
-                    R1[itrack,obj_imgnum-1] = tmpdf["AreaShape_MinorAxisLength"].values
-                    R2[itrack,obj_imgnum-1] = tmpdf["AreaShape_MajorAxisLength"].values
+                    R1[itrack,obj_imgnum-1] = tmpdf["AreaShape_MinorAxisLength"].values / 2.
+                    R2[itrack,obj_imgnum-1] = tmpdf["AreaShape_MajorAxisLength"].values / 2.
                 else:
                     Xbmin[itrack,obj_imgnum-1] = tmpdf["AreaShape_BoundingBoxMinimum_X"].values
                     Xbmax[itrack,obj_imgnum-1] = tmpdf["AreaShape_BoundingBoxMaximum_X"].values
@@ -707,6 +765,12 @@ def process_data(input_file,output_path,features,transition_graph,
                 tmpdf.reset_index(inplace=True) # transform indices to columns
                 for ifea in range(len(features)):
                     F[ifea][itrack,obj_imgnum-1] = tmpdf[features[ifea]].values
+        
+        # save referenced object number matrix
+        odf = pd.DataFrame(O,columns=[str(item+1) for item in range(max(imgnum))])
+        odf["TrackObjLabels"] = trackobjs_label
+        odf.set_index("TrackObjLabels",inplace=True)
+        odf.to_csv(os.path.join(output_path,"ref_obj_number.csv"))
         
         # plot feature table
         for ifea in range(len(fig_subdir)):
@@ -728,7 +792,8 @@ def process_data(input_file,output_path,features,transition_graph,
         # remove border intersected objects
         if exclude_borderobjs_conds["criterion"]=="circle":
             percentage = exclude_borderobjs_conds["percentage"]
-            Mb, Fb, Xb, Yb = remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,percentage)
+            bymajor = exclude_borderobjs_conds["bymajor"]
+            Mb, Fb, Xb, Yb = remove_intersect_border_by_circle(M,F,X,Y,R1,R2,xmax,ymax,bymajor,percentage)
         else:
             Mb, Fb, Xb, Yb = remove_intersect_border_by_bbox(M,F,X,Y,Xbmin,Xbmax,Ybmin,Ybmax,xmax,ymax)
             
